@@ -1,0 +1,26 @@
+{
+  "name": "bmfont",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "babel src --out-dir dist",
+    "prepublish": "yarn build",
+    "semantic-release": "semantic-release",
+    "travis-deploy-once": "travis-deploy-once",
+    "test": "yarn lint && flow",
+    "commit": "git-cz",
+    "lint": "eslint src"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "fs-extra": "^7.0.1",
+    "jimp": "^0.6.0",
+    "lodash": "^4.17.11",
+    "spritesheet-creator": "^2.0.0",
+    "ual": "^0.1.1"
+  },
+  "devDependencies": {
+    "commitizen": "^3.0.5",
+    "cz-conventional-changelog": "^2.1.0"
+  }
+}
