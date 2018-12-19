@@ -1,1 +1,1 @@
-export { default } from 'BitmapBont'
+export { default } from 'BitmapFont'
