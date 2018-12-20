@@ -51,6 +51,24 @@ type Page = {
     texture: *,
 };
 
+type PrerenderedChar = {
+    image: *,
+    position: {
+        x: number,
+        y: number,
+    }
+};
+
+type Size = {
+    width: number,
+    height: number,
+};
+
+type PrerenderedString = {
+    size: Size,
+    chars: Array<PrerenderedChar>,
+};
+
 function ensureArray4(arr: Array<number>): [ number, number, number, number ] {
     while(arr.length < 4) {
         arr.push(0)
@@ -69,6 +87,14 @@ function parseBool(str: string): boolean {
     return str === '1'
 }
 
+const SpecialCharCodes = {
+    nbsp: 0xa0,
+    space: 0x20,
+    ht: 0x9,
+    cr: 0xd,
+    lb: 0xa,
+}
+
 export default class BitmapFont {
     info: ?Info;
     common: ?Common;
@@ -80,6 +106,109 @@ export default class BitmapFont {
     }) {
         this.log = log
     }
+
+    isSpace(charCode: number): boolean {
+        return charCode === SpecialCharCodes.nbsp ||
+        charCode === SpecialCharCodes.space ||
+        charCode === SpecialCharCodes.ht
+    }
+
+    prerenderString(str: string): PrerenderedString {
+        const result = {
+            size: {
+                width: 0,
+                height: 0,
+            },
+            chars: [],
+        }
+        let nextFontPositionX = 0
+        let nextFontPositionY = 0
+        let kerningAmount = 0
+        let longestLine = 0
+        let totalHeight = 0
+        let quantityOfLines = 1
+        let stringLen = str.length
+
+        if(stringLen === 0) return result
+
+        if(!this.common) {
+            throw new Error(`font is missing common`)
+        }
+        const common: Common = this.common
+        totalHeight = common.lineHeight
+
+        for(const c of str) {
+            if (c === SpecialCharCodes.lb) {
+                quantityOfLines++
+                totalHeight += this.common.lineHeight
+                // if(m_fHeight > 0 && totalHeight > m_fHeight)
+                // {
+                //     totalHeight -= m_pConfiguration->m_nCommonHeight
+                //     quantityOfLines--
+                //     break
+                // }
+            }
+        }
+
+        nextFontPositionY = 0
+
+        let curline = 0
+        for (let i = 0; i < str.length; i++) {
+            let code = str.charCodeAt(i)
+
+            if(code === SpecialCharCodes.lb) {
+                nextFontPositionX = 0
+                nextFontPositionY += common.lineHeight
+                curline++
+                if(curline >= quantityOfLines) {
+                    break
+                }
+                continue
+            }
+
+            if(code === SpecialCharCodes.cr) {
+                continue
+            }
+
+            let id = code
+            if(this.isSpace(id)) {
+                id = SpecialCharCodes.space
+            }
+
+            let char
+            for(const page of this.pages) {
+                for(const c of page.chars) {
+                    if(c.id === id) {
+                        char = c
+                        break
+                    }
+                }
+            }
+
+            if(!char) {
+                throw new Error(`missing char code ${id} ("${str[i]}") in the font`)
+            }
+
+            let yOffset = char.yoffset
+            const pChar: PrerenderedChar = {
+                position: {
+                    x: nextFontPositionX + char.xoffset + kerningAmount,
+                    y: nextFontPositionY + yOffset,
+                },
+                image: char.image,
+            }
+            result.chars.push(pChar)
+
+            // update kerning
+            nextFontPositionX += (char.xadvance + kerningAmount)
+            longestLine = Math.max(longestLine, nextFontPositionX)
+        }
+
+        result.size.width = longestLine
+        result.size.height = totalHeight
+        return result
+    }
+
     packString(obj: {}, cmd: string): string {
         const tokens = []
         for(const key of _.keys(obj)) {
