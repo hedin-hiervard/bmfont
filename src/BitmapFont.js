@@ -22,6 +22,12 @@ type Char = {
     image: *,
 };
 
+type KerningPair = {
+    first: number,
+    second: number,
+    amount: number,
+};
+
 type Info = {
     face: string,
     size: number,
@@ -100,6 +106,7 @@ export default class BitmapFont {
     common: ?Common;
     pages: Array<Page>;
     log: Logger;
+    kernings: Array<KerningPair>;
 
     constructor({ log }: {
         log: Logger,
@@ -123,7 +130,6 @@ export default class BitmapFont {
         }
         let nextFontPositionX = 0
         let nextFontPositionY = 0
-        let kerningAmount = 0
         let longestLine = 0
         let totalHeight = 0
         let quantityOfLines = 1
@@ -151,6 +157,8 @@ export default class BitmapFont {
         }
 
         nextFontPositionY = 0
+
+        let prevCharCode
 
         let curline = 0
         for (let i = 0; i < str.length; i++) {
@@ -188,11 +196,16 @@ export default class BitmapFont {
             if(!char) {
                 throw new Error(`missing char code ${id} ("${str[i]}") in the font`)
             }
+            const kp = this.kernings.find(({ first, second }) => first === prevCharCode && second === code)
+            let kerning = 0
+            if(kp) {
+                kerning = kp.amount
+            }
 
             let yOffset = char.yoffset
             const pChar: PrerenderedChar = {
                 position: {
-                    x: nextFontPositionX + char.xoffset + kerningAmount,
+                    x: nextFontPositionX + char.xoffset + kerning,
                     y: nextFontPositionY + yOffset,
                 },
                 image: char.image,
@@ -200,8 +213,9 @@ export default class BitmapFont {
             result.chars.push(pChar)
 
             // update kerning
-            nextFontPositionX += (char.xadvance + kerningAmount)
+            nextFontPositionX += (char.xadvance + kerning)
             longestLine = Math.max(longestLine, nextFontPositionX)
+            prevCharCode = code
         }
 
         result.size.width = longestLine
@@ -294,6 +308,10 @@ export default class BitmapFont {
             this.log.info(`saving page ${page.id} texture to ${fullTexturePath} (referenced as ${relPath})`)
             await sg.texture.write(textureFile)
         }
+        this.log.debug(this.kernings)
+        for(const kp of this.kernings) {
+            fs.write(file, this.packString(kp, 'kerning'))
+        }
         await fs.close(file)
     }
 
@@ -335,6 +353,7 @@ export default class BitmapFont {
         this.info = null
         this.common = null
         this.pages = []
+        this.kernings = []
 
         this.log.info(`loading from ${filename}`)
 
@@ -470,6 +489,25 @@ export default class BitmapFont {
                     }
                 }
                 this.pages[this.pages.length - 1].chars.push(char)
+            } else if(cmd === 'kerning') {
+                const kerningPair = {
+                    first: 0,
+                    second: 0,
+                    amount: 0,
+                }
+                for(const { key, value } of dict) {
+                    switch(key) {
+                    case 'first': kerningPair.first = parseInt(value); break
+                    case 'second': kerningPair.second = parseInt(value); break
+                    case 'amount': kerningPair.amount = parseInt(value); break
+                    default:
+                        this.log.warn(`${filename}: unknown kerning command key: ${key}`)
+                        break
+                    }
+                }
+                this.kernings.push(kerningPair)
+            } else {
+                this.log.warn(`unknown cmd: ${cmd}`)
             }
         }
         await this.cutTexture()

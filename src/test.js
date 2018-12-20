@@ -25,4 +25,9 @@ import Jimp from 'jimp'
         }
     }
     await image.write(process.argv[3])
+
+    await bmf.save({
+        fntFile: `/Users/hedin/test.fnt`,
+        textureFile: `/Users/hedin/test.png`,
+    })
 })()
